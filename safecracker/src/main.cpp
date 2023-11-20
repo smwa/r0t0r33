@@ -4,6 +4,10 @@
 #include <NewEncoder.h> // https://github.com/gfvalvo/NewEncoder
 #include <LiquidCrystal.h> // https://github.com/arduino-libraries/LiquidCrystal
 
+// Notes
+
+// A step every 250 uS is about max
+
 // Vocab
 //// Notch is a position on a combination lock that may be part of a combination. Most locks have 3 cams that have 100 notches.
 //// Cam is a disc in a combination lock. There are typically 3 cams in a combination lock.
@@ -19,15 +23,15 @@ int dial_encoder_pin_one = 19;
 void ESP_ISR dial_encoder_callback(NewEncoder *encPtr, const volatile NewEncoder::EncoderState *state, void *uPtr);
 NewEncoder dial_encoder(dial_encoder_pin_zero, dial_encoder_pin_one, -15000, 15000, 0, FULL_PULSE);
 
-int dial_stepper_pin_enable = 6; // Engage motor
-int dial_stepper_pin_direction = 7; // Direction
-int dial_stepper_pin_step = 8; // Step
+int dial_stepper_pin_enable = 21; // Engage motor
+int dial_stepper_pin_step = 22; // Step
+int dial_stepper_pin_direction = 23; // Direction
 
 int dial_stepper_current_direction = LOW;
 
 // CONSTANTS, all will be tuned in initialization
 double MAX_SPEED = 0.2000; // steps per millisecond
-double ACCELERATION = 0.001; // percentage of speed to increase each millisecond
+double ACCELERATION = 0.01; // percentage of speed to increase each millisecond
 double STEPS_PER_NOTCH = 1.0; // Initial value needs to be low to force minimum speed
 double ENCODER_TICKS_PER_NOTCH = 4.0;
 long NOTCHES_PER_CAM = 67;
@@ -202,6 +206,7 @@ On boot initialization process:
 */
 void setup() {
   delay(100); // Let power flow
+  Serial.begin(115200);
   
   // Setup dial_encoder
   pinMode(dial_encoder_pin_zero, INPUT_PULLUP);
@@ -213,15 +218,6 @@ void setup() {
   lcd.begin(16, 2);
   lcd.clear();
   lcd.print("Wait...");
-  
-  // TMP Test code
-  for (int i = 0; i < 1000000000; i++) {
-    lcd.clear();
-    lcd.print(position);
-    lcd.setCursor(0, 1);
-    lcd.print(i);
-    delay(10);
-  }
 
   // Setup dial_stepper
   pinMode(dial_stepper_pin_enable, OUTPUT);
@@ -231,11 +227,35 @@ void setup() {
   pinMode(dial_stepper_pin_step, OUTPUT);
   digitalWrite(dial_stepper_pin_step, HIGH);
 
+  // TMP Test code
+//   engage_stepper_dial(false);
+//   for (int i = 0; i < 800; i++) {
+//     lcd.clear();
+//     lcd.print(position);
+//     lcd.setCursor(0, 1);
+//     lcd.print(i);
+//     delay(10);
+//   }
+
+// engage_stepper_dial(true);
+//   while (true) {
+//     for (int i = 1500; i > 10; i--) {
+//       for (int j = 0; j < 100000 / i; j++) {
+//         digitalWrite(dial_stepper_pin_step, LOW);
+//         sleep_microseconds(2);
+//         digitalWrite(dial_stepper_pin_step, HIGH);
+//         sleep_microseconds(i);
+//       }
+//       Serial.println(i);
+//     }
+//   }
+
   // reset stepper motor and let the user know we've booted
   move(20);
   move(-20);
 
   // Find ticks per cam, to set ticks per notch, even though we don't know how many notches yet.
+  lcd.clear();
   lcd.print("Dial to zero");
   engage_stepper_dial(false);
   sleep_microseconds(5 * 1000000);
@@ -244,6 +264,7 @@ void setup() {
   engage_stepper_dial(true);
   move(5);
   move(-5);
+  lcd.clear();
   lcd.print("Dial FORWARD to");
   lcd.setCursor(0, 1);
   lcd.print("next zero");
@@ -255,6 +276,7 @@ void setup() {
   ENCODER_TICKS_PER_NOTCH = position / NOTCHES_PER_CAM;
   engage_stepper_dial(true);
   move(9.0 * NOTCHES_PER_CAM);
+  lcd.clear();
   lcd.print("Dial to");
   lcd.setCursor(0, 1);
   lcd.print("nearest zero");
