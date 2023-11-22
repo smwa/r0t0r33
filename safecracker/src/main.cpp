@@ -287,15 +287,22 @@ void setup() {
 
   // Find steps per notch
   lcd.clear();
-  lcd.print("Wait 10 turns...");
+  lcd.print(ENCODER_TICKS_PER_NOTCH);
   lcd.setCursor(0, 1);
-  lcd.print("Tuning stepper");
+  lcd.print("Wait 10 turns...");
   engage_stepper_dial(true);
   sleep_microseconds(1 * 10000); // Wait until wheel is physically engaged
   long current_steps = dial_stepper_step;
   move(10.0 * NOTCHES_PER_CAM);
   long steps_per_ten_rounds = dial_stepper_step - current_steps;
   STEPS_PER_NOTCH = std::round((steps_per_ten_rounds / NOTCHES_PER_CAM) / 10.0);
+
+  // Advise STEPS_PER_NOTCH
+  lcd.clear();
+  lcd.print("Steps per notch");
+  lcd.setCursor(0, 1);
+  lcd.print(STEPS_PER_NOTCH);
+  sleep_microseconds(3 * 1000000);
 
   // Set notches per cam
   //// The user sets the dial to position "20". On a 100 notch dial where the notches are really 1.5 big, you point to "30".
@@ -308,6 +315,13 @@ void setup() {
   sleep_microseconds(5 * 1000000);
   engage_stepper_dial(true);
   NOTCHES_PER_CAM = std::round(20.0 / ((position - current_ticks) / (ENCODER_TICKS_PER_NOTCH * NOTCHES_PER_CAM)));
+
+  // Advise NOTCHES_PER_CAM
+  lcd.clear();
+  lcd.print("Notches per cam");
+  lcd.setCursor(0, 1);
+  lcd.print(NOTCHES_PER_CAM);
+  sleep_microseconds(3 * 1000000);
 
   // Tune speed
   lcd.clear();
