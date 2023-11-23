@@ -30,10 +30,10 @@ int dial_stepper_pin_direction = 23; // Direction
 int dial_stepper_current_direction = LOW;
 
 // CONSTANTS, all will be tuned in initialization
-double MAX_SPEED = 0.2000; // steps per millisecond
-double ACCELERATION = 0.01; // percentage of speed to increase each millisecond
+double MAX_SPEED = 0.1000; // steps per millisecond
+double ACCELERATION = 0.4; // percentage of speed to increase each millisecond
 double STEPS_PER_NOTCH = 1.0; // Initial value needs to be low to force minimum speed
-double ENCODER_TICKS_PER_NOTCH = 4.0;
+double ENCODER_TICKS_PER_NOTCH = 6.0;
 long NOTCHES_PER_CAM = 67;
 
 // RUNNING VALUES
@@ -89,29 +89,42 @@ void step_stepper_dial(long steps) {
 bool need_to_decelerate(double current_speed, double speed_minimum, double speed_to_change) {
   double _steps_per_ms_to_change = std::abs(speed_to_change);
   double _steps_per_ms = std::abs(current_speed);
+  // Serial.println("pt2.3");
   _steps_per_ms = _steps_per_ms + _steps_per_ms_to_change;
   double _target_steps_per_ms = std::abs(speed_minimum);
   long _steps_remaining = std::abs(target - position * ENCODER_TICKS_PER_NOTCH) * STEPS_PER_NOTCH;
+  // Serial.println("pt2.4");
 
   while (_steps_remaining > 0) {
+    // Serial.println("pt2.5");
+    // Serial.println(_steps_remaining);
+    // Serial.println(_steps_per_ms);
+    // Serial.println(_steps_per_ms_to_change);
+    
+    _steps_per_ms = std::max(speed_minimum, _steps_per_ms);
     _steps_remaining -= _steps_per_ms;
     _steps_per_ms -= _steps_per_ms_to_change;
   }
+  // Serial.println("pt2.6");
   return (_steps_per_ms >= _target_steps_per_ms);
 }
 
 void step_if_ready() {
   unsigned long now = get_time_in_microseconds();
   if (now < time_of_next_step) {
+    // Serial.println("Loop");
+    // Serial.println(now);
+    // Serial.println(time_of_next_step);
     return;
   }
 
-  double speed_minimum = MAX_SPEED * ACCELERATION * 0.01; // TODO Maybe needs manual tuning
+  double speed_minimum = MAX_SPEED * ACCELERATION * 1; // TODO Maybe needs manual tuning
 
-  long target_from_position = target - std::round(position * ENCODER_TICKS_PER_NOTCH);
+  long target_from_position = target - std::round(position / ENCODER_TICKS_PER_NOTCH);
   if (target_from_position == 0) {
     speed = 0.0;
   }
+  Serial.println(target * ENCODER_TICKS_PER_NOTCH - position);
 
   // Do not step motor
   if (speed < speed_minimum && speed > -1.0 * speed_minimum) {
@@ -124,27 +137,37 @@ void step_if_ready() {
       speed = -1.0 * speed_minimum;
     }
   }
-
+  // Serial.println(speed);
   // Not using else because we're changing speed in the above "if"
-  if (speed > 0) {
+  if (speed > 0.001) {
     step_stepper_dial(1);
   }
-  else if (speed < 0) {
+  else if (speed < -0.001) {
     step_stepper_dial(-1);
   }
+  // Serial.println("pt1");
   // Accelerate or decelerate
   if (now >= time_of_next_acceleration_change) {
+    // Serial.println("pt2");
     time_of_next_acceleration_change = now + 1000;
+    // Serial.println("pt2.1");
     double speed_to_change = ACCELERATION * MAX_SPEED;
+    // Serial.println("pt2.2");
     bool decelerate = need_to_decelerate(speed, speed_minimum, speed_to_change);
+    // Serial.println("pt3");
     if (speed > 0) {
+      // Serial.println("pt4");
       if (!decelerate) {
+        // Serial.println("pt5");
         speed += speed_to_change;
         speed = std::min(MAX_SPEED, speed);
+        // Serial.println("pt6");
       }
       else {
+        // Serial.println("pt7");
         speed -= speed_to_change;
         speed = std::max(speed_minimum * 1.00000000001, speed);
+        // Serial.println("pt8");
       }
     }
     else {
@@ -158,13 +181,26 @@ void step_if_ready() {
       }
     }
   }
-  time_of_next_step = now + std::floor(1000.0 / speed);
+  // Serial.println("pt20");
+  if (speed < speed_minimum && speed > -1.0 * speed_minimum) {
+    time_of_next_step = now + 100;
+  }
+  else {
+    // Serial.println(speed);
+    // Serial.println(speed_minimum);
+    // sleep_microseconds(3000000);
+    time_of_next_step = now + std::floor(1000.0 / speed);
+  }
+  // Serial.println("pt21");
 }
 
 void move(double notches) {
+  // Serial.println("Moving");
   long _notches = std::round(notches);
-  target = std::round(position * ENCODER_TICKS_PER_NOTCH) + _notches;
-  while (target != std::round(position * ENCODER_TICKS_PER_NOTCH)) {
+  target = std::round(position / ENCODER_TICKS_PER_NOTCH) + _notches;
+  // Serial.println("entering while");
+  while (target != std::round(position / ENCODER_TICKS_PER_NOTCH)) {
+    // Serial.println("not there yet");
     step_if_ready();
   }
 }
@@ -205,7 +241,7 @@ On boot initialization process:
   The safecracker will now start cracking.
 */
 void setup() {
-  delay(100); // Let power flow
+  sleep_microseconds(100 * 1000); // Let power flow
   Serial.begin(115200);
   
   // Setup dial_encoder
@@ -246,35 +282,44 @@ void setup() {
 //         digitalWrite(dial_stepper_pin_step, HIGH);
 //         sleep_microseconds(i);
 //       }
-//       Serial.println(i);
+//       // Serial.println(i);
 //     }
 //   }
 
+// engage_stepper_dial(true);
+// while (true) {
+//   Serial.println("steppy");
+// step_stepper_dial(-1);
+// sleep_microseconds(100000);
+// }
+
   // reset stepper motor and let the user know we've booted
-  move(20);
-  move(-20);
+  move(1);
+  move(-1);
 
   // Find ticks per cam, to set ticks per notch, even though we don't know how many notches yet.
   lcd.clear();
   lcd.print("Dial to zero");
   engage_stepper_dial(false);
   sleep_microseconds(5 * 1000000);
+  engage_stepper_dial(true);
   position = 0;
   target = 0;
-  engage_stepper_dial(true);
-  move(5);
-  move(-5);
+  lcd.clear();
+  lcd.print("Wait...");
+  move(1);
+  move(-1);
   lcd.clear();
   lcd.print("Dial FORWARD to");
   lcd.setCursor(0, 1);
   lcd.print("next zero");
   engage_stepper_dial(false);
   sleep_microseconds(5 * 1000000);
+  engage_stepper_dial(true);
   lcd.clear();
   lcd.print("Wait 9 turns...");
   // Set rough estimate
   ENCODER_TICKS_PER_NOTCH = position / NOTCHES_PER_CAM;
-  engage_stepper_dial(true);
   move(9.0 * NOTCHES_PER_CAM);
   lcd.clear();
   lcd.print("Dial to");
@@ -282,6 +327,7 @@ void setup() {
   lcd.print("nearest zero");
   engage_stepper_dial(false);
   sleep_microseconds(5 * 1000000);
+  engage_stepper_dial(true);
   // Set more precise number
   ENCODER_TICKS_PER_NOTCH = std::round((position / NOTCHES_PER_CAM) / 10.0);
 
@@ -290,7 +336,6 @@ void setup() {
   lcd.print(ENCODER_TICKS_PER_NOTCH);
   lcd.setCursor(0, 1);
   lcd.print("Wait 10 turns...");
-  engage_stepper_dial(true);
   sleep_microseconds(1 * 10000); // Wait until wheel is physically engaged
   long current_steps = dial_stepper_step;
   move(10.0 * NOTCHES_PER_CAM);
@@ -310,8 +355,8 @@ void setup() {
   lcd.print("Dial to twenty,");
   lcd.setCursor(0, 1);
   lcd.print(" or 30 for loose");
-  engage_stepper_dial(false);
   long current_ticks = position;
+  engage_stepper_dial(false);
   sleep_microseconds(5 * 1000000);
   engage_stepper_dial(true);
   NOTCHES_PER_CAM = std::round(20.0 / ((position - current_ticks) / (ENCODER_TICKS_PER_NOTCH * NOTCHES_PER_CAM)));
