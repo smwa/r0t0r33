@@ -62,7 +62,7 @@ void sleep_microseconds(unsigned long microseconds) {
 
 void step_stepper_dial(long steps) {
   dial_stepper_step += steps;
-  if (steps < 0) {
+  if (steps > 0) {
     if (dial_stepper_current_direction == HIGH) {
       dial_stepper_current_direction = LOW;
       digitalWrite(dial_stepper_pin_direction, dial_stepper_current_direction);
@@ -222,13 +222,14 @@ void custom_loop() {
 void ESP_ISR dial_encoder_callback(NewEncoder *encPtr, const volatile NewEncoder::EncoderState *state, void *uPtr) {
   (void) encPtr;
   (void) uPtr;
-  position += dial_encoder.getAndSet(0);
+  position -= dial_encoder.getAndSet(0); // Negative to fix hardware direction
 }
 
 void hardware_test() {
   Serial.println("Starting hardware test");
 
   while (true) {
+    Serial.println("Top of hardware test loop");
     lcd.clear();
     lcd.print("Current Position");
     lcd.setCursor(0, 1);
@@ -236,25 +237,26 @@ void hardware_test() {
 
     engage_stepper_dial(true);
     sleep_microseconds(300);
-    digitalWrite(dial_stepper_pin_enable, LOW);
+    digitalWrite(dial_stepper_pin_step, LOW);
     digitalWrite(dial_stepper_pin_direction, LOW);
     sleep_microseconds(1000 * 1000);
     lcd.setCursor(0, 1);
     lcd.print(position);
-    digitalWrite(dial_stepper_pin_enable, HIGH);
+    digitalWrite(dial_stepper_pin_step, HIGH);
     digitalWrite(dial_stepper_pin_direction, HIGH);
     sleep_microseconds(1000 * 1000);
     lcd.setCursor(0, 1);
     lcd.print(position);
 
+    Serial.println("Disengaging stepper dial");
     engage_stepper_dial(false);
     sleep_microseconds(300);
-    digitalWrite(dial_stepper_pin_enable, LOW);
+    digitalWrite(dial_stepper_pin_step, LOW);
     digitalWrite(dial_stepper_pin_direction, LOW);
     sleep_microseconds(1000 * 1000);
     lcd.setCursor(0, 1);
     lcd.print(position);
-    digitalWrite(dial_stepper_pin_enable, HIGH);
+    digitalWrite(dial_stepper_pin_step, HIGH);
     digitalWrite(dial_stepper_pin_direction, HIGH);
     sleep_microseconds(1000 * 1000);
   }
