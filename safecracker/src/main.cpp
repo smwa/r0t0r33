@@ -3,10 +3,9 @@
 #include <algorithm>
 #include <NewEncoder.h> // https://github.com/gfvalvo/NewEncoder
 #include <LiquidCrystal.h> // https://github.com/arduino-libraries/LiquidCrystal
+#include <AccelStepper.h> // https://github.com/waspinator/AccelStepper
 
-// Notes
-
-// A step every 250 uS is about max
+// TODO Be wary of any move() before STEPS_PER_NOTCH is set in init.
 
 // Vocab
 //// Notch is a position on a combination lock that may be part of a combination. Most locks have 3 cams that have 100 notches.
@@ -27,197 +26,46 @@ int dial_stepper_pin_enable = 21; // Engage motor
 int dial_stepper_pin_step = 22; // Step
 int dial_stepper_pin_direction = 23; // Direction
 
-// CONSTANTS, all will be tuned in initialization
-double MAX_SPEED = 0.1000; // steps per millisecond
-double ACCELERATION = 0.4; // percentage of speed to increase each millisecond
-double STEPS_PER_NOTCH = 1.0; // Initial value needs to be low to force minimum speed
+AccelStepper dial_stepper(AccelStepper::DRIVER, dial_stepper_pin_step, dial_stepper_pin_direction);
+
+// CONSTANTS - Hard coded
+double MAX_SPEED = 2000.0000; // steps/second
+double ACCELERATION = 500.0; // steps/second^2
+
+// CONSTANTS - To be tuned
+double STEPS_PER_NOTCH = 20.0;
 double ENCODER_TICKS_PER_NOTCH = 6.0;
 long NOTCHES_PER_CAM = 67;
 
 // RUNNING VALUES
 long position = 0; // in encoder ticks. position in notches = position * ENCODER_TICKS_PER_NOTCH
-double speed = 0.0; // steps per millisecond
-long target = 0; // in notches
-long dial_stepper_step = 0; // SIGNED
-unsigned long time_of_next_step = 0;
-unsigned long time_of_next_acceleration_change = 0;
-int dial_stepper_current_direction = LOW;
+long target = 0; // in encoder ticks. target in notches = target * ENCODER_TICKS_PER_NOTCH
 
 unsigned long get_time_in_microseconds() {
   return micros();
 }
 
-void engage_stepper_dial(bool engage) {
-  if (engage) {
-    digitalWrite(dial_stepper_pin_enable, LOW);
-  }
-  else {
-    digitalWrite(dial_stepper_pin_enable, HIGH);
-  }
-}
-
 void sleep_microseconds(unsigned long microseconds) {
-  delayMicroseconds(microseconds);
-}
-
-void step_stepper_dial(long steps) {
-  dial_stepper_step += steps;
-  if (steps > 0) {
-    if (dial_stepper_current_direction == HIGH) {
-      dial_stepper_current_direction = LOW;
-      digitalWrite(dial_stepper_pin_direction, dial_stepper_current_direction);
-      sleep_microseconds(250);
-    }
-    steps = -1 * steps;
-  }
-  else {
-    if (dial_stepper_current_direction == LOW) {
-      dial_stepper_current_direction = HIGH;
-      digitalWrite(dial_stepper_pin_direction, dial_stepper_current_direction);
-      sleep_microseconds(250);
-    }
-  }
-  for (int i = 0; i < steps; i++) {
-    digitalWrite(dial_stepper_pin_step, LOW);
-    sleep_microseconds(2);
-    digitalWrite(dial_stepper_pin_step, HIGH);
-    sleep_microseconds(2);
+  unsigned long until = get_time_in_microseconds() + microseconds;
+  while (get_time_in_microseconds() < until) {
+     dial_stepper.run();
+     delayMicroseconds(10);
   }
 }
 
-bool need_to_decelerate(double current_speed, double speed_minimum, double speed_to_change) {
-  double _steps_per_ms_to_change = std::abs(speed_to_change);
-  double _steps_per_ms = std::abs(current_speed);
-  // Serial.println("pt2.3");
-  _steps_per_ms = _steps_per_ms + _steps_per_ms_to_change;
-  double _target_steps_per_ms = std::abs(speed_minimum);
-  long _steps_remaining = std::abs(target - position * ENCODER_TICKS_PER_NOTCH) * STEPS_PER_NOTCH;
-  // Serial.println("pt2.4");
-
-  while (_steps_remaining > 0) {
-    // Serial.println("pt2.5");
-    // Serial.println(_steps_remaining);
-    // Serial.println(_steps_per_ms);
-    // Serial.println(_steps_per_ms_to_change);
-    
-    _steps_per_ms = std::max(speed_minimum, _steps_per_ms);
-    _steps_remaining -= _steps_per_ms;
-    _steps_per_ms -= _steps_per_ms_to_change;
-  }
-  // Serial.println("pt2.6");
-  return (_steps_per_ms >= _target_steps_per_ms);
+void sleep_seconds(double seconds) {
+  sleep_microseconds(std::round(seconds * 1000000));
 }
 
-void step_if_ready() {
-  unsigned long now = get_time_in_microseconds();
-  if (now < time_of_next_step) {
-    // Serial.println("Loop");
-    // Serial.println(now);
-    // Serial.println(time_of_next_step);
-    return;
-  }
+void move(long notches) {
+  target = position + notches * ENCODER_TICKS_PER_NOTCH;
 
-  double speed_minimum = MAX_SPEED * ACCELERATION * 1; // TODO Maybe needs manual tuning
-
-  long target_from_position = target - std::round(position / ENCODER_TICKS_PER_NOTCH);
-  if (target_from_position == 0) {
-    speed = 0.0;
-  }
-  Serial.println(target * ENCODER_TICKS_PER_NOTCH - position);
-
-  // Do not step motor
-  if (speed < speed_minimum && speed > -1.0 * speed_minimum) {
-    time_of_next_step = now + 10; // Wait 10us
-    time_of_next_acceleration_change = now + 1000; // Wait 1ms
-    if (target_from_position > 0) {
-      speed = speed_minimum;
-    }
-    else if (target_from_position < 0) {
-      speed = -1.0 * speed_minimum;
-    }
-  }
-  // Serial.println(speed);
-  // Not using else because we're changing speed in the above "if"
-  if (speed > 0.001) {
-    step_stepper_dial(1);
-  }
-  else if (speed < -0.001) {
-    step_stepper_dial(-1);
-  }
-  // Serial.println("pt1");
-  // Accelerate or decelerate
-  if (now >= time_of_next_acceleration_change) {
-    // Serial.println("pt2");
-    time_of_next_acceleration_change = now + 1000;
-    // Serial.println("pt2.1");
-    double speed_to_change = ACCELERATION * MAX_SPEED;
-    // Serial.println("pt2.2");
-    bool decelerate = need_to_decelerate(speed, speed_minimum, speed_to_change);
-    // Serial.println("pt3");
-    if (speed > 0) {
-      // Serial.println("pt4");
-      if (!decelerate) {
-        // Serial.println("pt5");
-        speed += speed_to_change;
-        speed = std::min(MAX_SPEED, speed);
-        // Serial.println("pt6");
-      }
-      else {
-        // Serial.println("pt7");
-        speed -= speed_to_change;
-        speed = std::max(speed_minimum * 1.00000000001, speed);
-        // Serial.println("pt8");
-      }
-    }
-    else {
-      if (!decelerate) {
-        speed -= speed_to_change;
-        speed = std::max(-1.0 * MAX_SPEED, speed);
-      }
-      else {
-        speed += speed_to_change;
-        speed = std::min(speed_minimum * -1.00000000001, speed);
-      }
-    }
-  }
-  // Serial.println("pt20");
-  if (speed < speed_minimum && speed > -1.0 * speed_minimum) {
-    time_of_next_step = now + 100;
-  }
-  else {
-    // Serial.println(speed);
-    // Serial.println(speed_minimum);
-    // sleep_microseconds(3000000);
-    unsigned long time_to_wait = std::floor(1000.0 / std::abs(speed));
-    time_of_next_step = now + std::min(time_to_wait, (unsigned long)500 * 1000);
-  }
-  // Serial.println("pt21");
-}
-
-void move(double notches) {
-  // Serial.println("Moving");
-  long _notches = std::round(notches);
-  target = std::round(position / ENCODER_TICKS_PER_NOTCH) + _notches;
-  // Serial.println("entering while");
   while (target != std::round(position / ENCODER_TICKS_PER_NOTCH)) {
-    // Serial.println("not there yet");
-    step_if_ready();
+    dial_stepper.move(std::round((target - position) * STEPS_PER_NOTCH / ENCODER_TICKS_PER_NOTCH));
+    dial_stepper.run();
   }
-}
-
-unsigned long check_time_required_to_move() {
-  unsigned long now = get_time_in_microseconds();
-  move(3 * NOTCHES_PER_CAM);
-  return (get_time_in_microseconds() - now);
-}
-
-void custom_loop() {
-  while (true) {
-    move(1);
-    sleep_microseconds(1 * 1000 * 1000);
-    move(NOTCHES_PER_CAM);
-    sleep_microseconds(1 * 1000 * 1000);
-  }
+  dial_stepper.stop();
+  dial_stepper.runToPosition();
 }
 
 void ESP_ISR dial_encoder_callback(NewEncoder *encPtr, const volatile NewEncoder::EncoderState *state, void *uPtr) {
@@ -236,22 +84,33 @@ void hardware_test() {
     lcd.setCursor(0, 1);
     lcd.print(position);
 
-    engage_stepper_dial(true);
+    dial_stepper.enableOutputs();
     sleep_microseconds(300);
-    digitalWrite(dial_stepper_pin_step, LOW);
-    digitalWrite(dial_stepper_pin_direction, LOW);
+
+    dial_stepper.runToNewPosition(1);
     sleep_microseconds(1000 * 1000);
+
+    dial_stepper.runToNewPosition(0);
+    sleep_microseconds(1000 * 1000);
+
     lcd.setCursor(0, 1);
     lcd.print(position);
-    digitalWrite(dial_stepper_pin_step, HIGH);
-    digitalWrite(dial_stepper_pin_direction, HIGH);
+
+    dial_stepper.disableOutputs();
+    sleep_microseconds(300);
+
+    dial_stepper.runToNewPosition(1);
     sleep_microseconds(1000 * 1000);
+
+    dial_stepper.runToNewPosition(0);
+    sleep_microseconds(1000 * 1000);
+    
     lcd.setCursor(0, 1);
     lcd.print(position);
 
     Serial.println("Disengaging stepper dial");
-    engage_stepper_dial(false);
-    sleep_microseconds(300);
+    dial_stepper.disableOutputs();
+    sleep_microseconds(1000 * 1000);
     digitalWrite(dial_stepper_pin_step, LOW);
     digitalWrite(dial_stepper_pin_direction, LOW);
     sleep_microseconds(1000 * 1000);
@@ -278,7 +137,7 @@ On boot initialization process:
   The safecracker will now start cracking.
 */
 void setup() {
-  sleep_microseconds(100 * 1000); // Let power flow
+  // Setup PC com
   Serial.begin(115200);
   
   // Setup dial_encoder
@@ -294,51 +153,60 @@ void setup() {
 
   // Setup dial_stepper
   pinMode(dial_stepper_pin_enable, OUTPUT);
-  engage_stepper_dial(true);
+  digitalWrite(dial_stepper_pin_enable, LOW);
   pinMode(dial_stepper_pin_direction, OUTPUT);
-  digitalWrite(dial_stepper_pin_direction, dial_stepper_current_direction);
+  digitalWrite(dial_stepper_pin_direction, LOW);
   pinMode(dial_stepper_pin_step, OUTPUT);
   digitalWrite(dial_stepper_pin_step, HIGH);
+  dial_stepper.setMaxSpeed(MAX_SPEED);
+  dial_stepper.setAcceleration(ACCELERATION);
+  dial_stepper.setEnablePin(dial_stepper_pin_enable);
+  // dial_stepper.setPinsInverted(true, false, false); // Invert direction if necessary
 
-  // Hardware Test. Comment for prod
+  // Hardware Test. Comment out for prod
   // hardware_test();
 
   // reset stepper motor and let the user know we've booted
-  move(1);
-  move(-1);
+  dial_stepper.runToNewPosition(100);
+  dial_stepper.runToNewPosition(0);
 
   // Find ticks per cam, to set ticks per notch, even though we don't know how many notches yet.
   lcd.clear();
   lcd.print("Dial to zero");
-  engage_stepper_dial(false);
-  sleep_microseconds(5 * 1000000);
-  engage_stepper_dial(true);
+  dial_stepper.disableOutputs();
+  sleep_seconds(5);
+  dial_stepper.enableOutputs();
+  sleep_microseconds(50 * 1000); // engage motor
   position = 0;
-  target = 0;
+  dial_stepper.setCurrentPosition(0);
   lcd.clear();
   lcd.print("Wait...");
-  move(1);
-  move(-1);
+  dial_stepper.runToNewPosition(STEPS_PER_NOTCH * NOTCHES_PER_CAM);
+  long _tmp_position = position;
+  dial_stepper.runToNewPosition(0);
   lcd.clear();
   lcd.print("Dial FORWARD to");
   lcd.setCursor(0, 1);
   lcd.print("next zero");
-  engage_stepper_dial(false);
-  sleep_microseconds(5 * 1000000);
-  engage_stepper_dial(true);
+  dial_stepper.disableOutputs();
+  sleep_seconds(5);
+  dial_stepper.enableOutputs();
   lcd.clear();
   lcd.print("Wait 9 turns...");
-  // Set rough estimate
+
+  // Set rough estimates
   ENCODER_TICKS_PER_NOTCH = position / NOTCHES_PER_CAM;
+  STEPS_PER_NOTCH = std::round((STEPS_PER_NOTCH * NOTCHES_PER_CAM) / (_tmp_position / ENCODER_TICKS_PER_NOTCH));
+
+  // Set more precise encoder ticks per notch
   move(9.0 * NOTCHES_PER_CAM);
   lcd.clear();
   lcd.print("Dial to");
   lcd.setCursor(0, 1);
   lcd.print("nearest zero");
-  engage_stepper_dial(false);
-  sleep_microseconds(5 * 1000000);
-  engage_stepper_dial(true);
-  // Set more precise number
+  dial_stepper.disableOutputs();
+  sleep_seconds(5);
+  dial_stepper.enableOutputs();
   ENCODER_TICKS_PER_NOTCH = std::round((position / NOTCHES_PER_CAM) / 10.0);
 
   // Find steps per notch
@@ -347,17 +215,17 @@ void setup() {
   lcd.setCursor(0, 1);
   lcd.print("Wait 10 turns...");
   sleep_microseconds(1 * 10000); // Wait until wheel is physically engaged
-  long current_steps = dial_stepper_step;
-  move(10.0 * NOTCHES_PER_CAM);
-  long steps_per_ten_rounds = dial_stepper_step - current_steps;
-  STEPS_PER_NOTCH = std::round((steps_per_ten_rounds / NOTCHES_PER_CAM) / 10.0);
+  long current_steps = dial_stepper.currentPosition();
+  long dial_test_rounds = 10.0;
+  move(dial_test_rounds * NOTCHES_PER_CAM);
+  STEPS_PER_NOTCH = std::round(((dial_stepper.currentPosition() - current_steps) / dial_test_rounds) / NOTCHES_PER_CAM);
 
   // Advise STEPS_PER_NOTCH
   lcd.clear();
   lcd.print("Steps per notch");
   lcd.setCursor(0, 1);
   lcd.print(STEPS_PER_NOTCH);
-  sleep_microseconds(3 * 1000000);
+  sleep_seconds(3);
 
   // Set notches per cam
   //// The user sets the dial to position "20". On a 100 notch dial where the notches are really 1.5 big, you point to "30".
@@ -366,9 +234,9 @@ void setup() {
   lcd.setCursor(0, 1);
   lcd.print(" or 30 for loose");
   long current_ticks = position;
-  engage_stepper_dial(false);
-  sleep_microseconds(5 * 1000000);
-  engage_stepper_dial(true);
+  dial_stepper.disableOutputs();
+  sleep_seconds(5);
+  dial_stepper.enableOutputs();
   NOTCHES_PER_CAM = std::round(20.0 / ((position - current_ticks) / (ENCODER_TICKS_PER_NOTCH * NOTCHES_PER_CAM)));
 
   // Advise NOTCHES_PER_CAM
@@ -376,55 +244,22 @@ void setup() {
   lcd.print("Notches per cam");
   lcd.setCursor(0, 1);
   lcd.print(NOTCHES_PER_CAM);
-  sleep_microseconds(3 * 1000000);
+  sleep_seconds(3);
 
-  // Tune speed
-  lcd.clear();
-  lcd.print("Tuning speed...");
-  lcd.setCursor(0, 1);
-  lcd.print(MAX_SPEED);
-  unsigned long best_time = check_time_required_to_move();
-  MAX_SPEED *= 2.0;
-  lcd.setCursor(0, 1);
-  lcd.print(MAX_SPEED);
-  unsigned long trial_time = check_time_required_to_move();
-  while (trial_time <= best_time) {
-    best_time = trial_time;
-
-    // Next trial
-    MAX_SPEED *= 2.0;
-    lcd.setCursor(0, 1);
-    lcd.print(MAX_SPEED);
-    trial_time = check_time_required_to_move();
-  }
-  MAX_SPEED = MAX_SPEED / 2.0;
-
-  // Tune acceleration
-  lcd.clear();
-  lcd.print("Tuning accel...");
-  lcd.setCursor(0, 1);
-  lcd.print(ACCELERATION);
-  best_time = check_time_required_to_move();
-  ACCELERATION *= 2.0;
-  lcd.setCursor(0, 1);
-  lcd.print(ACCELERATION);
-  trial_time = check_time_required_to_move();
-  while (trial_time <= best_time) {
-    best_time = trial_time;
-
-    // Next trial
-    ACCELERATION *= 2.0;
-    lcd.setCursor(0, 1);
-    lcd.print(ACCELERATION);
-    trial_time = check_time_required_to_move();
-  }
-  ACCELERATION = ACCELERATION / 2.0;
+  // Done
   lcd.clear();
   lcd.print("Initialized.");
-
-  custom_loop();
+  move(0);
+  position = 0;
+  target = 0;
+  dial_stepper.setCurrentPosition(0);
 }
 
 void loop() {
-
+  while (true) {
+    move(1);
+    sleep_seconds(1);
+    move(NOTCHES_PER_CAM);
+    sleep_seconds(1);
+  }
 }
