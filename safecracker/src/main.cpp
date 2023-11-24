@@ -27,8 +27,6 @@ int dial_stepper_pin_enable = 21; // Engage motor
 int dial_stepper_pin_step = 22; // Step
 int dial_stepper_pin_direction = 23; // Direction
 
-int dial_stepper_current_direction = LOW;
-
 // CONSTANTS, all will be tuned in initialization
 double MAX_SPEED = 0.1000; // steps per millisecond
 double ACCELERATION = 0.4; // percentage of speed to increase each millisecond
@@ -43,6 +41,7 @@ long target = 0; // in notches
 long dial_stepper_step = 0; // SIGNED
 unsigned long time_of_next_step = 0;
 unsigned long time_of_next_acceleration_change = 0;
+int dial_stepper_current_direction = LOW;
 
 unsigned long get_time_in_microseconds() {
   return micros();
@@ -226,6 +225,35 @@ void ESP_ISR dial_encoder_callback(NewEncoder *encPtr, const volatile NewEncoder
   position += dial_encoder.getAndSet(0);
 }
 
+void hardware_test() {
+  Serial.println("Starting hardware test");
+
+  while (true) {
+    lcd.clear();
+    lcd.print("Current Position");
+    lcd.setCursor(0, 1);
+    lcd.print(position);
+
+    engage_stepper_dial(true);
+    sleep_microseconds(300);
+    digitalWrite(dial_stepper_pin_enable, LOW);
+    digitalWrite(dial_stepper_pin_direction, LOW);
+    sleep_microseconds(1000 * 1000);
+    digitalWrite(dial_stepper_pin_enable, HIGH);
+    digitalWrite(dial_stepper_pin_direction, HIGH);
+    sleep_microseconds(1000 * 1000);
+
+    engage_stepper_dial(false);
+    sleep_microseconds(300);
+    digitalWrite(dial_stepper_pin_enable, LOW);
+    digitalWrite(dial_stepper_pin_direction, LOW);
+    sleep_microseconds(1000 * 1000);
+    digitalWrite(dial_stepper_pin_enable, HIGH);
+    digitalWrite(dial_stepper_pin_direction, HIGH);
+    sleep_microseconds(1000 * 1000);
+  }
+}
+
 /*
 On boot initialization process:
   Wait until you see the dial move forward and back.
@@ -263,35 +291,7 @@ void setup() {
   pinMode(dial_stepper_pin_step, OUTPUT);
   digitalWrite(dial_stepper_pin_step, HIGH);
 
-  // TMP Test code
-//   engage_stepper_dial(false);
-//   for (int i = 0; i < 800; i++) {
-//     lcd.clear();
-//     lcd.print(position);
-//     lcd.setCursor(0, 1);
-//     lcd.print(i);
-//     delay(10);
-//   }
-
-// engage_stepper_dial(true);
-//   while (true) {
-//     for (int i = 1500; i > 10; i--) {
-//       for (int j = 0; j < 100000 / i; j++) {
-//         digitalWrite(dial_stepper_pin_step, LOW);
-//         sleep_microseconds(2);
-//         digitalWrite(dial_stepper_pin_step, HIGH);
-//         sleep_microseconds(i);
-//       }
-//       // Serial.println(i);
-//     }
-//   }
-
-// engage_stepper_dial(true);
-// while (true) {
-//   Serial.println("steppy");
-// step_stepper_dial(-1);
-// sleep_microseconds(100000);
-// }
+  hardware_test();
 
   // reset stepper motor and let the user know we've booted
   move(1);
