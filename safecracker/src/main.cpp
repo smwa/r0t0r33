@@ -188,7 +188,8 @@ void step_if_ready() {
     // Serial.println(speed);
     // Serial.println(speed_minimum);
     // sleep_microseconds(3000000);
-    time_of_next_step = now + std::floor(1000.0 / speed);
+    unsigned long time_to_wait = std::floor(1000.0 / std::abs(speed));
+    time_of_next_step = now + std::min(time_to_wait, (unsigned long)500 * 1000);
   }
   // Serial.println("pt21");
 }
@@ -300,7 +301,7 @@ void setup() {
   digitalWrite(dial_stepper_pin_step, HIGH);
 
   // Hardware Test. Comment for prod
-  hardware_test();
+  // hardware_test();
 
   // reset stepper motor and let the user know we've booted
   move(1);
