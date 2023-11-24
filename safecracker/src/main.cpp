@@ -239,15 +239,21 @@ void hardware_test() {
     digitalWrite(dial_stepper_pin_enable, LOW);
     digitalWrite(dial_stepper_pin_direction, LOW);
     sleep_microseconds(1000 * 1000);
+    lcd.setCursor(0, 1);
+    lcd.print(position);
     digitalWrite(dial_stepper_pin_enable, HIGH);
     digitalWrite(dial_stepper_pin_direction, HIGH);
     sleep_microseconds(1000 * 1000);
+    lcd.setCursor(0, 1);
+    lcd.print(position);
 
     engage_stepper_dial(false);
     sleep_microseconds(300);
     digitalWrite(dial_stepper_pin_enable, LOW);
     digitalWrite(dial_stepper_pin_direction, LOW);
     sleep_microseconds(1000 * 1000);
+    lcd.setCursor(0, 1);
+    lcd.print(position);
     digitalWrite(dial_stepper_pin_enable, HIGH);
     digitalWrite(dial_stepper_pin_direction, HIGH);
     sleep_microseconds(1000 * 1000);
