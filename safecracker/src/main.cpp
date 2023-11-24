@@ -291,6 +291,7 @@ void setup() {
   pinMode(dial_stepper_pin_step, OUTPUT);
   digitalWrite(dial_stepper_pin_step, HIGH);
 
+  // Hardware Test. Comment for prod
   hardware_test();
 
   // reset stepper motor and let the user know we've booted
