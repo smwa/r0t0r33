@@ -17,7 +17,7 @@ int dial_stepper_pin_direction = 23; // Direction
 AccelStepper dial_stepper(AccelStepper::DRIVER, dial_stepper_pin_step, dial_stepper_pin_direction);
 
 // CONSTANTS
-double MAX_SPEED = 40.0000; // steps/second // 2000 is solid at half step
+double MAX_SPEED = 2000.0000; // steps/second // 2000 is solid at half step
 double ACCELERATION = MAX_SPEED * 4.0; // steps/second^2
 double STEPS_PER_REVOLUTION = 400.0;
 long NOTCHES_PER_CAM = 40;
@@ -25,9 +25,9 @@ double STEPS_PER_NOTCH = STEPS_PER_REVOLUTION / NOTCHES_PER_CAM;
 
 // RUNNING VALUES
 long position = 0; // in notches
-long sequence_cam_one = 0; // Adjust when resuming
-long sequence_cam_two = 0;
-long sequence_cam_three = 0;
+long sequence_cam_one = 5; // Adjust when resuming
+long sequence_cam_two = 10;
+long sequence_cam_three = 15;
 
 unsigned long get_time_in_microseconds() {
   return micros();
@@ -65,7 +65,7 @@ void setup() {
   dial_stepper.setMaxSpeed(MAX_SPEED);
   dial_stepper.setAcceleration(ACCELERATION);
   dial_stepper.setEnablePin(dial_stepper_pin_enable);
-  dial_stepper.setPinsInverted(false, false, true); // Invert stepper pins if necessary
+  dial_stepper.setPinsInverted(true, false, true); // Invert stepper pins if necessary
   dial_stepper.enableOutputs();
 
   // reset stepper motor and let the user know we've booted
@@ -87,8 +87,15 @@ long notches_to_notch(long target, long step) {
 }
 
 void loop() {
+  lcd.clear();
+  lcd.print("Dial to 0");
+  dial_stepper.disableOutputs();
+  sleep_microseconds(5 * 1000 * 1000);
+  dial_stepper.enableOutputs();
+  sleep_microseconds(100 * 1000);
   move(1);
   long _reset_notches = -1;
+
   for (long cam_one = sequence_cam_one; cam_one < NOTCHES_PER_CAM; cam_one++) {
     for (long cam_two = sequence_cam_two; cam_two < NOTCHES_PER_CAM; cam_two++) {
       for (long cam_three = sequence_cam_three; cam_three < NOTCHES_PER_CAM; cam_three++) {
@@ -99,7 +106,7 @@ void loop() {
         lcd.print(" ");
         lcd.print(cam_three);
         // one - Go right(negative) past 0 once(because we always reset) and then to cam_one
-        move(_reset_notches + NOTCHES_PER_CAM * -1 + (NOTCHES_PER_CAM - cam_one));
+        move(_reset_notches - NOTCHES_PER_CAM - (NOTCHES_PER_CAM - cam_one));
 
         // two - One full revolution to the left and then to cam_two
         move(NOTCHES_PER_CAM + notches_to_notch(cam_two, 1));
@@ -108,12 +115,11 @@ void loop() {
         move(notches_to_notch(cam_three, -1));
 
         // test
-        sleep_microseconds(2 * 1000 * 1000);
+        sleep_microseconds(5 * 1000 * 1000);
         // TODO
 
         // reset to 0
-        _reset_notches = 0 - (position % NOTCHES_PER_CAM);
-        if (_reset_notches == 0) _reset_notches = 0 - NOTCHES_PER_CAM;
+        _reset_notches = notches_to_notch(0, -1);
       }
     }
   }
