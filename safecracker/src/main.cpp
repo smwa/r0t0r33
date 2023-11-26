@@ -29,8 +29,8 @@ int dial_stepper_pin_direction = 23; // Direction
 AccelStepper dial_stepper(AccelStepper::DRIVER, dial_stepper_pin_step, dial_stepper_pin_direction);
 
 // CONSTANTS - Hard coded
-double MAX_SPEED = 2000.0000; // steps/second
-double ACCELERATION = 500.0; // steps/second^2
+double MAX_SPEED = 40.0000; // steps/second // 2000 is solid at half step
+double ACCELERATION = MAX_SPEED * 4.0; // steps/second^2
 
 // CONSTANTS - To be tuned
 double STEPS_PER_NOTCH = 20.0;
@@ -72,6 +72,8 @@ void ESP_ISR dial_encoder_callback(NewEncoder *encPtr, const volatile NewEncoder
   (void) encPtr;
   (void) uPtr;
   position -= dial_encoder.getAndSet(0); // Negative to fix hardware direction
+  Serial.print("Position: ");
+  Serial.println(position);
 }
 
 void hardware_test() {
@@ -83,6 +85,9 @@ void hardware_test() {
     lcd.print("Current Position");
     lcd.setCursor(0, 1);
     lcd.print(position);
+
+    Serial.println(digitalRead(dial_encoder_pin_zero));
+    Serial.println(digitalRead(dial_encoder_pin_one));
 
     dial_stepper.enableOutputs();
     sleep_microseconds(300);
@@ -161,10 +166,12 @@ void setup() {
   dial_stepper.setMaxSpeed(MAX_SPEED);
   dial_stepper.setAcceleration(ACCELERATION);
   dial_stepper.setEnablePin(dial_stepper_pin_enable);
-  // dial_stepper.setPinsInverted(true, false, false); // Invert direction if necessary
+  dial_stepper.setPinsInverted(false, false, true); // Invert steppe pins if necessary
+  dial_stepper.enableOutputs();
 
   // Hardware Test. Comment out for prod
-  // hardware_test();
+  // dial_stepper.runToNewPosition(1000000);
+  hardware_test();
 
   // reset stepper motor and let the user know we've booted
   dial_stepper.runToNewPosition(100);
