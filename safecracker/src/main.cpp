@@ -8,6 +8,8 @@
 //// Step is a stepper motor step.
 
 // Hardware
+int success_pin = 18;
+
 LiquidCrystal lcd(13, 12, 25, 26, 27, 14);
 
 int dial_stepper_pin_enable = 21; // Engage motor
@@ -49,6 +51,9 @@ void move(long notches) {
 void setup() {
   // Setup PC com
   Serial.begin(115200);
+
+  // Setup success pin
+  pinMode(success_pin, INPUT_PULLUP);
 
   // Setup LCD
   lcd.begin(16, 2);
@@ -115,8 +120,9 @@ void loop() {
         move(notches_to_notch(cam_three, -1));
 
         // test
-        sleep_microseconds(5 * 1000 * 1000);
-        // TODO
+        if (digitalRead(success_pin) == HIGH) {
+          sleep_microseconds(1 * 1000 * 1000);
+        }
 
         // reset to 0
         _reset_notches = notches_to_notch(0, -1);
