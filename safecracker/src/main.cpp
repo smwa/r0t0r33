@@ -129,4 +129,5 @@ void loop() {
       }
     }
   }
+  sleep_microseconds(4200000000);
 }
