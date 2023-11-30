@@ -120,8 +120,8 @@ void loop() {
         move(notches_to_notch(cam_three, -1));
 
         // test
-        if (digitalRead(success_pin) == HIGH) {
-          sleep_microseconds(1 * 1000 * 1000);
+        while (digitalRead(success_pin) == HIGH) {
+          sleep_microseconds(100 * 1000 * 1000);
         }
 
         // reset to 0
