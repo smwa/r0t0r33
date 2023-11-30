@@ -22,7 +22,7 @@ AccelStepper dial_stepper(AccelStepper::DRIVER, dial_stepper_pin_step, dial_step
 double MAX_SPEED = 2000.0000; // steps/second // 2000 is solid at half step
 double ACCELERATION = MAX_SPEED * 4.0; // steps/second^2
 double STEPS_PER_REVOLUTION = 400.0;
-long NOTCHES_PER_CAM = 40;
+long NOTCHES_PER_CAM = 67;
 double STEPS_PER_NOTCH = STEPS_PER_REVOLUTION / NOTCHES_PER_CAM;
 
 // RUNNING VALUES
