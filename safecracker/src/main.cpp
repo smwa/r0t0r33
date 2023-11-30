@@ -19,9 +19,9 @@ int dial_stepper_pin_direction = 23; // Direction
 AccelStepper dial_stepper(AccelStepper::DRIVER, dial_stepper_pin_step, dial_stepper_pin_direction);
 
 // CONSTANTS
-double MAX_SPEED = 2000.0000; // steps/second // 2000 is solid at half step
-double ACCELERATION = MAX_SPEED * 4.0; // steps/second^2
-double STEPS_PER_REVOLUTION = 400.0;
+double MAX_SPEED = 900.0000; // steps/second // 2000 is solid at half step
+double ACCELERATION = MAX_SPEED * 9.0; // steps/second^2
+double STEPS_PER_REVOLUTION = 200.0;
 long NOTCHES_PER_CAM = 67;
 double STEPS_PER_NOTCH = STEPS_PER_REVOLUTION / NOTCHES_PER_CAM;
 
