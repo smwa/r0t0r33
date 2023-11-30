@@ -27,9 +27,9 @@ double STEPS_PER_NOTCH = STEPS_PER_REVOLUTION / NOTCHES_PER_CAM;
 
 // RUNNING VALUES
 long position = 0; // in notches
-long sequence_cam_one = 5; // Adjust when resuming
-long sequence_cam_two = 10;
-long sequence_cam_three = 15;
+long sequence_cam_one = 0; // Adjust when resuming
+long sequence_cam_two = 0;
+long sequence_cam_three = 0;
 
 unsigned long get_time_in_microseconds() {
   return micros();
