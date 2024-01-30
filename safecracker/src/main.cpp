@@ -46,9 +46,11 @@ double ALLOWED_ERROR = 0.2; // This is how many cam rotations. 0.2 is 20% of a d
 // RUNNING VALUES
 long position = 0; // in notches
 long encoder_position = 0;
-long sequence_cam_one = 0; // Adjust when resuming
+
+// Adjust when resuming
+long sequence_cam_one = NOTCHES_PER_CAM; // Cam 1 goes negative
 long sequence_cam_two = 0;
-long sequence_cam_three = 0;
+long sequence_cam_three = NOTCHES_PER_CAM; // Cam 3 goes negative
 
 void ESP_ISR dial_encoder_callback(NewEncoder *encPtr, const volatile NewEncoder::EncoderState *state, void *uPtr) {
   (void) encPtr;
@@ -148,44 +150,73 @@ void loop() {
   sleep_microseconds(100 * 1000);
   encoder_position = 0;
   move(1);
-  long _reset_notches = -1;
 
   long old_step_tracker = 0;
 
   for (long cam_one = sequence_cam_one; cam_one < NOTCHES_PER_CAM; cam_one++) {
+    // Use encoder to find error and fix within dial_stepper internal state
+    old_step_tracker = dial_stepper.currentPosition();
+    dial_stepper.setCurrentPosition(round(STEPS_PER_CAM * encoder_position / ENCODER_TICKS_PER_CAM));
+    lcd.setCursor(0, 1);
+    lcd.print("StepFix ");
+    lcd.print(dial_stepper.currentPosition() - old_step_tracker);
+
+    // one - Go right(negative) past 0 once(because we always reset) and then to cam_one
+    if (cam_one == sequence_cam_one) {
+      move(notches_to_notch(cam_one, -1) - (3 * NOTCHES_PER_CAM));
+    }
+    else {
+      move(notches_to_notch(cam_one, -1) - (2 * NOTCHES_PER_CAM));
+    }
+
     for (long cam_two = sequence_cam_two; cam_two < NOTCHES_PER_CAM; cam_two++) {
-      for (long cam_three = sequence_cam_three; cam_three < NOTCHES_PER_CAM; cam_three++) {
-        lcd.clear();
+      // two - One full revolution to the left and then to cam_two
+      if (cam_two == sequence_cam_two) {
+        // First time after bumping previous cam
+        move((NOTCHES_PER_CAM * 2) + notches_to_notch(cam_two, 1));
+      }
+      else {
+        // Bump cam 2 one notch
+        move((NOTCHES_PER_CAM * 1) + notches_to_notch(cam_two, 1));
+      }
+
+      for (long cam_three = sequence_cam_three; cam_three >= 0; cam_three--) {
+        lcd.setCursor(0, 0);
         lcd.print(round(cam_one * NOTCH_LENIENCY));
         lcd.print(" ");
         lcd.print(round(cam_two * NOTCH_LENIENCY));
         lcd.print(" ");
         lcd.print(round(cam_three * NOTCH_LENIENCY));
-        // one - Go right(negative) past 0 once(because we always reset) and then to cam_one
-        move(_reset_notches - NOTCHES_PER_CAM - (NOTCHES_PER_CAM - cam_one));
-
-        // two - One full revolution to the left and then to cam_two
-        move(NOTCHES_PER_CAM + notches_to_notch(cam_two, 1));
+        lcd.print("   ");
 
         // three - Go right(negative) to cam_three
-        move(notches_to_notch(cam_three, -1));
+        if (cam_three == sequence_cam_three) {
+          // First time
+          move(notches_to_notch(cam_three, -1) - (1 * NOTCHES_PER_CAM));
+        }
+        else {
+          // Not first time
+          move(notches_to_notch(cam_three, -1));
+        }
 
-        // test
+        // Turn dial to pull back latch, *specific to current lock*
+        move(NOTCHES_PER_CAM);
+        // check for success
+        while (digitalRead(success_pin) == HIGH) {
+          sleep_microseconds(100 * 1000 * 1000);
+          lcd.setCursor(0, 1);
+          lcd.print("SuccessPin LOW");
+        }
+        
+        move(-1 * NOTCHES_PER_CAM);
+        // check for success
         while (digitalRead(success_pin) == HIGH) {
           sleep_microseconds(100 * 1000 * 1000);
           lcd.setCursor(0, 1);
           lcd.print("SuccessPin LOW");
         }
 
-        // reset to 0
-        _reset_notches = notches_to_notch(0, -1);
-        
-        // Use encoder to find error and fix within dial_stepper internal state
-        old_step_tracker = dial_stepper.currentPosition();
-        dial_stepper.setCurrentPosition(round(STEPS_PER_CAM * encoder_position / ENCODER_TICKS_PER_CAM));
-        lcd.setCursor(0, 1);
-        lcd.print("StepFix ");
-        lcd.print(dial_stepper.currentPosition() - old_step_tracker);
+
       }
     }
   }
