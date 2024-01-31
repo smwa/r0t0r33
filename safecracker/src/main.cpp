@@ -48,9 +48,9 @@ long position = 0; // in notches
 long encoder_position = 0;
 
 // Adjust when resuming
-long sequence_cam_one = NOTCHES_PER_CAM; // Cam 1 goes negative
+long sequence_cam_one = NOTCHES_PER_CAM - 1; // Cam 1 goes negative
 long sequence_cam_two = 0;
-long sequence_cam_three = NOTCHES_PER_CAM; // Cam 3 goes negative
+long sequence_cam_three = NOTCHES_PER_CAM - 1; // Cam 3 goes negative
 
 void ESP_ISR dial_encoder_callback(NewEncoder *encPtr, const volatile NewEncoder::EncoderState *state, void *uPtr) {
   (void) encPtr;
@@ -153,7 +153,7 @@ void loop() {
 
   long old_step_tracker = 0;
 
-  for (long cam_one = sequence_cam_one; cam_one < NOTCHES_PER_CAM; cam_one++) {
+  for (long cam_one = sequence_cam_one; cam_one >= 0; cam_one--) {
     // Use encoder to find error and fix within dial_stepper internal state
     old_step_tracker = dial_stepper.currentPosition();
     dial_stepper.setCurrentPosition(round(STEPS_PER_CAM * encoder_position / ENCODER_TICKS_PER_CAM));
